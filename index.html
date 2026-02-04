@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ChessReps Pro | Mastery</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+    <style>
+        :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; --due: #fa412d; --solve: #4583b6; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        .piece-417db { transition: transform 200ms linear !important; }
+        .white-1e1d7 { background-color: #ebecd0 !important; }
+        .black-3c85d { background-color: #779556 !important; }
+
+        header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border-bottom: 2px solid var(--border); }
+        .stats-dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 15px; }
+        .stat-card { background: var(--panel); padding: 8px; border-radius: 6px; text-align: center; border: 1px solid var(--border); }
+        .stat-val { display: block; font-size: 1.1rem; font-weight: bold; color: var(--accent); }
+        .stat-lbl { font-size: 0.6rem; text-transform: uppercase; opacity: 0.7; }
+
+        #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 5px auto; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+        .controls { width: 92vw; max-width: 360px; margin: 0 auto 10px; background: var(--panel); padding: 12px; border-radius: 8px; box-sizing: border-box; }
+        
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+        button { padding: 10px 2px; border-radius: 6px; font-weight: bold; border: none; color: #fff; cursor: pointer; text-transform: uppercase; font-size: 0.65rem; }
+        
+        .library-section { flex: 1; overflow-y: auto; background: #1a1917; }
+        .repo-item { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .repo-item.active { background: #2b2926; border-left: 4px solid var(--accent); }
+        .item-name { font-weight: bold; font-size: 0.85rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; }
+        
+        .item-actions { display: flex; gap: 10px; align-items: center; }
+        .action-icon { background: none; border: none; color: #555; font-size: 1rem; cursor: pointer; padding: 5px; }
+        .highlight-hint { background-color: rgba(245, 246, 130, 0.7) !important; }
+    </style>
+</head>
+<body>
+
+<header>
+    <span style="font-weight:bold; color:var(--accent)">CHESSREPS PRO</span>
+    <label style="background:var(--accent); padding:6px 12px; border-radius:4px; color:#000; font-size:0.75rem; font-weight:bold; cursor:pointer;">
+        PGN+ <input type="file" id="pgnInput" accept=".pgn" multiple hidden>
+    </label>
+</header>
+
+<div class="stats-dashboard">
+    <div class="stat-card"><span id="stat-total" class="stat-val">0</span><span class="stat-lbl">Lines</span></div>
+    <div class="stat-card"><span id="stat-mastered" class="stat-val">0</span><span class="stat-lbl">Lvl 5+</span></div>
+</div>
+
+<div id="board-wrapper"><div id="board" style="width: 100%"></div></div>
+
+<div class="controls">
+    <div id="status-msg" style="text-align:center; font-weight:bold; margin-bottom:8px; font-size:0.8rem; color:var(--accent); height:1.2em;">Tap to enable sound</div>
+    <div class="btn-group">
+        <button style="background:#3c3a38" onclick="showHint()">Hint</button>
+        <button style="background:#5c5a58" onclick="autoPlay()">Watch</button>
+        <button style="background:var(--solve)" onclick="solveMove()">Solve</button>
+    </div>
+    <button onclick="resetDrill()" style="width:100%; background:#444;">Reset Position</button>
+</div>
+
+<div class="library-section" id="repoList"></div>
+
+<script>
+    let board = null, game = new Chess(), repoData = [], currentPath = [], moveIndex = 0, currentIdx = -1, errorOccurred = false, isAutoPlaying = false;
+
+    // RELIABLE AUDIO SOURCES
+    const soundUrls = {
+        move: 'https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/move-self.mp3',
+        capture: 'https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/capture.mp3',
+        check: 'https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/move-check.mp3',
+        error: 'https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/illegal.mp3'
+    };
+
+    const audioCtx = {
+        move: new Audio(soundUrls.move),
+        capture: new Audio(soundUrls.capture),
+        check: new Audio(soundUrls.check),
+        error: new Audio(soundUrls.error)
+    };
+
+    // UNLOCK AUDIO FOR MOBILE BROWSER
+    function unlockAudio() {
+        Object.values(audioCtx).forEach(sound => {
+            sound.play().then(() => { sound.pause(); sound.currentTime = 0; }).catch(() => {});
+        });
+        document.getElementById('status-msg').innerText = "Sound Enabled";
+        document.removeEventListener('click', unlockAudio);
+    }
+    document.addEventListener('click', unlockAudio);
+
+    function playSfx(move) {
+        if (!move) return;
+        let s = audioCtx.move;
+        if (move.san.includes('+')) s = audioCtx.check;
+        else if (move.san.includes('x')) s = audioCtx.capture;
+        s.currentTime = 0;
+        s.play().catch(e => console.log("Audio play blocked"));
+    }
+
+    window.onload = () => {
+        const saved = localStorage.getItem('chess_reps_vFinal');
+        repoData = saved ? JSON.parse(saved) : [{ name: "Starter: King's Pawn", raw: "1. e4 e5", level: 0, nextReview: 0 }];
+        board = Chessboard('board', { 
+            draggable: true, position: 'start', moveSpeed: 250, snapSpeed: 0,
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png', 
+            onDrop: onDrop 
+        });
+        updateDashboard(); renderSidebar(); $(window).resize(board.resize);
+    };
+
+    function onDrop(source, target) {
+        if (currentIdx === -1 || isAutoPlaying) return 'snapback';
+        let move = game.move({ from: source, to: target, promotion: 'q' });
+        if (!move || move.san !== currentPath[moveIndex]) {
+            if (move) game.undo();
+            audioCtx.error.play(); errorOccurred = true; return 'snapback';
+        }
+        playSfx(move); moveIndex++;
+        if (moveIndex < currentPath.length) setTimeout(opponentReply, 400);
+        else finalizeSRS();
+    }
+
+    function opponentReply() {
+        const move = game.move(currentPath[moveIndex++]);
+        board.position(game.fen()); playSfx(move);
+        if (moveIndex === currentPath.length) finalizeSRS();
+    }
+
+    function autoPlay() {
+        if (currentIdx === -1) return alert("Select a variation!");
+        resetDrill(); isAutoPlaying = true;
+        let step = 0;
+        let interval = setInterval(() => {
+            if (step >= currentPath.length || !isAutoPlaying) {
+                clearInterval(interval); isAutoPlaying = false;
+                document.getElementById('status-msg').innerText = "Review complete. Drill it!";
+                return;
+            }
+            const move = game.move(currentPath[step++]);
+            board.position(game.fen()); playSfx(move);
+        }, 900);
+    }
+
+    function finalizeSRS() {
+        if (isAutoPlaying) return;
+        let item = repoData[currentIdx];
+        if (!errorOccurred) item.level = Math.min((item.level || 0) + 1, 6);
+        else item.level = 0;
+        let d = new Date(); d.setDate(d.getDate() + [0, 1, 3, 7, 14, 30, 90][item.level]);
+        item.nextReview = d.getTime();
+        errorOccurred = false; save(); updateDashboard(); renderSidebar();
+        document.getElementById('status-msg').innerText = "Line Complete!";
+    }
+
+    function loadOpening(idx) {
+        isAutoPlaying = false; currentIdx = idx; errorOccurred = false;
+        game.reset(); game.load_pgn(repoData[idx].raw.replace(/\[.*?\]/g, '').trim());
+        currentPath = game.history(); resetDrill(); renderSidebar();
+        document.getElementById('status-msg').innerText = "Training: " + repoData[idx].name;
+    }
+
+    function renameLine(e, idx) {
+        e.stopPropagation();
+        const n = prompt("New name:", repoData[idx].name);
+        if (n) { repoData[idx].name = n; save(); renderSidebar(); }
+    }
+
+    function deleteLine(e, idx) {
+        e.stopPropagation();
+        if (confirm("Delete variation?")) {
+            repoData.splice(idx, 1);
+            if (currentIdx === idx) currentIdx = -1;
+            save(); updateDashboard(); renderSidebar();
+        }
+    }
+
+    function solveMove() {
+        if (currentIdx === -1 || isAutoPlaying) return;
+        errorOccurred = true; opponentReply();
+    }
+
+    function showHint() {
+        if (currentIdx === -1 || moveIndex >= currentPath.length) return;
+        errorOccurred = true;
+        const move = (new Chess(game.fen())).move(currentPath[moveIndex]);
+        $(`.square-${move.from}, .square-${move.to}`).addClass('highlight-hint');
+        setTimeout(() => $('.square-55d63').removeClass('highlight-hint'), 1200);
+    }
+
+    document.getElementById('pgnInput').onchange = async (e) => {
+        for (const file of Array.from(e.target.files)) {
+            const text = await file.text();
+            const games = text.split(/\[Event /g).filter(g => g.trim().length > 5).map(g => '[Event ' + g);
+            repoData = repoData.concat(games.map(raw => {
+                const name = (raw.match(/\[Opening "(.*?)"\]/) || [null, null])[1] || (raw.match(/\[Event "(.*?)"\]/) || [null, "Line"])[1];
+                return { name, raw, level: 0, nextReview: 0 };
+            }));
+        }
+        save(); updateDashboard(); renderSidebar();
+    };
+
+    function renderSidebar() {
+        document.getElementById('repoList').innerHTML = repoData.map((item, i) => `
+            <div class="repo-item ${currentIdx==i?'active':''}" onclick="loadOpening(${i})">
+                <span class="item-name">${item.name}</span>
+                <div class="item-actions">
+                    <button class="action-icon" onclick="renameLine(event, ${i})">✏️</button>
+                    <button class="action-icon" onclick="deleteLine(event, ${i})">🗑️</button>
+                </div>
+            </div>`).join('');
+    }
+
+    function save() { localStorage.setItem('chess_reps_vFinal', JSON.stringify(repoData)); }
+    function updateDashboard() {
+        document.getElementById('stat-total').innerText = repoData.length;
+        document.getElementById('stat-mastered').innerText = repoData.filter(i => i.level >= 5).length;
+    }
+    function resetDrill() { game.reset(); board.start(); moveIndex = 0; }
+</script>
+</body>
+</html>
+
