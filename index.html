@@ -14,19 +14,22 @@
         :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
-        /* Drag and Drop Overlay */
         #drop-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(129, 182, 76, 0.3); border: 5px dashed var(--accent); z-index: 10000; display: none; align-items: center; justify-content: center; pointer-events: none; }
         #drop-overlay.active { display: flex; }
 
         header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border-bottom: 2px solid var(--border); }
         #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 10px auto; border: 1px solid var(--border); }
-        .controls { width: 92vw; max-width: 360px; margin: 0 auto 10px; background: var(--panel); padding: 12px; border-radius: 8px; }
         
+        /* CHESS.COM THEME COLORS */
+        .white-1e1d7 { background-color: #ebecd0 !important; }
+        .black-3c85d { background-color: #779556 !important; }
+
+        .controls { width: 92vw; max-width: 360px; margin: 0 auto 10px; background: var(--panel); padding: 12px; border-radius: 8px; box-sizing: border-box; }
         .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
         button { padding: 12px 2px; border-radius: 6px; font-weight: bold; border: none; color: #fff; cursor: pointer; text-transform: uppercase; font-size: 0.65rem; }
         
         .library-section { flex: 1; overflow-y: auto; background: #1a1917; }
-        .repo-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; }
+        .repo-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; }
         .repo-item.active { background: #2b2926; border-left: 4px solid var(--accent); }
     </style>
 </head>
@@ -64,12 +67,14 @@
     };
 
     window.onload = () => {
-        const saved = localStorage.getItem('chess_reps_vFinal_v2');
+        const saved = localStorage.getItem('chess_reps_final_v3');
         if (saved) repoData = JSON.parse(saved);
         
         board = Chessboard('board', { 
             draggable: true, 
             position: 'start', 
+            // FIXED PIECE THEME PATH
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
             onDrop: onDrop,
             onSnapEnd: () => board.position(game.fen())
         });
@@ -79,69 +84,50 @@
         window.addEventListener('resize', () => board.resize());
     };
 
-    // --- DRAG AND DROP LOGIC ---
     function initDragAndDrop() {
         const overlay = document.getElementById('drop-overlay');
-        
-        window.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            overlay.classList.add('active');
-        });
-
-        window.addEventListener('dragleave', (e) => {
-            if (e.relatedTarget === null) overlay.classList.remove('active');
-        });
-
-        window.addEventListener('drop', (e) => {
-            e.preventDefault();
-            overlay.classList.remove('active');
-            handleFiles(e.dataTransfer.files);
-        });
+        window.addEventListener('dragover', (e) => { e.preventDefault(); overlay.classList.add('active'); });
+        window.addEventListener('dragleave', (e) => { if (e.relatedTarget === null) overlay.classList.remove('active'); });
+        window.addEventListener('drop', (e) => { e.preventDefault(); overlay.classList.remove('active'); handleFiles(e.dataTransfer.files); });
     }
 
     async function handleFiles(files) {
         for (const file of files) {
             const ext = file.name.split('.').pop().toLowerCase();
             if (ext !== 'pgn' && ext !== 'js') continue;
-
             const text = await file.text();
             const games = text.split(/\[Event /g).filter(g => g.trim().length > 5).map(g => '[Event ' + g);
-            
             repoData = repoData.concat(games.map(raw => ({
                 name: (raw.match(/\[Opening "(.*?)"\]/) || [null, file.name])[1],
                 raw: raw
             })));
         }
-        localStorage.setItem('chess_reps_vFinal_v2', JSON.stringify(repoData));
+        localStorage.setItem('chess_reps_final_v3', JSON.stringify(repoData));
         renderSidebar();
     }
 
     document.getElementById('pgnInput').onchange = (e) => handleFiles(e.target.files);
 
-    // --- GAMEPLAY LOGIC ---
     function onDrop(source, target) {
         if (currentIdx === -1) return 'snapback';
         let move = game.move({ from: source, to: target, promotion: 'q' });
-        
         if (!move || move.san !== currentPath[moveIndex]) {
             if (move) game.undo();
             return 'snapback';
         }
-
         executeMoveSequence(move);
     }
 
     function solveMove() {
         if (currentIdx === -1 || moveIndex >= currentPath.length) return;
         let move = game.move(currentPath[moveIndex]);
-        board.position(game.fen());
+        board.position(game.fen()); // Manually update board for the Solve button
         executeMoveSequence(move);
     }
 
     function executeMoveSequence(move) {
         move.san.includes('x') ? sounds.capture.play() : sounds.move.play();
         moveIndex++;
-
         if (moveIndex < currentPath.length) {
             setTimeout(() => {
                 let reply = game.move(currentPath[moveIndex++]);
@@ -155,9 +141,7 @@
     }
 
     function checkFinish() {
-        if (moveIndex >= currentPath.length) {
-            document.getElementById('status-msg').innerText = "Line Complete!";
-        }
+        if (moveIndex >= currentPath.length) document.getElementById('status-msg').innerText = "Line Complete!";
     }
 
     function loadOpening(idx) {
@@ -170,12 +154,7 @@
         document.getElementById('status-msg').innerText = repoData[idx].name;
     }
 
-    function resetDrill() {
-        game.reset();
-        board.start();
-        moveIndex = 0;
-    }
-
+    function resetDrill() { game.reset(); board.start(); moveIndex = 0; }
     function renderSidebar() {
         document.getElementById('repoList').innerHTML = repoData.map((item, i) => `
             <div class="repo-item ${currentIdx==i?'active':''}" onclick="loadOpening(${i})">
