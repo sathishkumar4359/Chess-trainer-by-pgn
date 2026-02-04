@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ChessReps Pro | Final Fix</title>
+    <title>ChessReps Pro | Stable</title>
     
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -14,13 +14,10 @@
         :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
-        #drop-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(129, 182, 76, 0.3); border: 5px dashed var(--accent); z-index: 10000; display: none; align-items: center; justify-content: center; pointer-events: none; }
-        #drop-overlay.active { display: flex; }
-
         header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border-bottom: 2px solid var(--border); }
         #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 10px auto; border: 1px solid var(--border); }
         
-        /* CHESS.COM THEME COLORS */
+        /* CHESS.COM COLORS */
         .white-1e1d7 { background-color: #ebecd0 !important; }
         .black-3c85d { background-color: #779556 !important; }
 
@@ -35,25 +32,23 @@
 </head>
 <body>
 
-<div id="drop-overlay"><h1>Drop .PGN or .JS Files</h1></div>
-
 <header>
     <span style="font-weight:bold; color:var(--accent)">CHESSREPS PRO</span>
     <label style="background:var(--accent); padding:6px 12px; border-radius:4px; color:#000; font-size:0.75rem; font-weight:bold; cursor:pointer;">
-        UPLOAD <input type="file" id="pgnInput" accept=".pgn,.js" multiple hidden>
+        UPLOAD PGN <input type="file" id="pgnInput" accept=".pgn" multiple hidden>
     </label>
 </header>
 
 <div id="board-wrapper"><div id="board" style="width: 100%"></div></div>
 
 <div class="controls">
-    <div id="status-msg" style="text-align:center; font-weight:bold; margin-bottom:8px; font-size:0.8rem; color:var(--accent);">Ready</div>
+    <div id="status-msg" style="text-align:center; font-weight:bold; margin-bottom:8px; font-size:0.8rem; color:var(--accent);">Select a variation</div>
     <div class="btn-group">
         <button style="background:#3c3a38" onclick="showHint()">Hint</button>
         <button style="background:#5c5a58" onclick="autoPlay()">Watch</button>
         <button style="background:#4583b6" onclick="solveMove()">Solve</button>
     </div>
-    <button onclick="resetDrill()" style="width:100%; background:#444; margin-top:10px; padding:10px;">Reset</button>
+    <button onclick="resetDrill()" style="width:100%; background:#444; margin-top:10px; padding:10px;">Reset Position</button>
 </div>
 
 <div class="library-section" id="repoList"></div>
@@ -67,81 +62,54 @@
     };
 
     window.onload = () => {
-        const saved = localStorage.getItem('chess_reps_final_v3');
+        const saved = localStorage.getItem('chess_reps_stable');
         if (saved) repoData = JSON.parse(saved);
         
         board = Chessboard('board', { 
             draggable: true, 
             position: 'start', 
-            // FIXED PIECE THEME PATH
             pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
-            onDrop: onDrop,
+            onDrop: handleMove,
             onSnapEnd: () => board.position(game.fen())
         });
         
         renderSidebar();
-        initDragAndDrop();
         window.addEventListener('resize', () => board.resize());
     };
 
-    function initDragAndDrop() {
-        const overlay = document.getElementById('drop-overlay');
-        window.addEventListener('dragover', (e) => { e.preventDefault(); overlay.classList.add('active'); });
-        window.addEventListener('dragleave', (e) => { if (e.relatedTarget === null) overlay.classList.remove('active'); });
-        window.addEventListener('drop', (e) => { e.preventDefault(); overlay.classList.remove('active'); handleFiles(e.dataTransfer.files); });
-    }
-
-    async function handleFiles(files) {
-        for (const file of files) {
-            const ext = file.name.split('.').pop().toLowerCase();
-            if (ext !== 'pgn' && ext !== 'js') continue;
-            const text = await file.text();
-            const games = text.split(/\[Event /g).filter(g => g.trim().length > 5).map(g => '[Event ' + g);
-            repoData = repoData.concat(games.map(raw => ({
-                name: (raw.match(/\[Opening "(.*?)"\]/) || [null, file.name])[1],
-                raw: raw
-            })));
-        }
-        localStorage.setItem('chess_reps_final_v3', JSON.stringify(repoData));
-        renderSidebar();
-    }
-
-    document.getElementById('pgnInput').onchange = (e) => handleFiles(e.target.files);
-
-    function onDrop(source, target) {
+    function handleMove(source, target) {
         if (currentIdx === -1) return 'snapback';
         let move = game.move({ from: source, to: target, promotion: 'q' });
+
         if (!move || move.san !== currentPath[moveIndex]) {
             if (move) game.undo();
             return 'snapback';
         }
-        executeMoveSequence(move);
+
+        processMove(move);
     }
 
     function solveMove() {
         if (currentIdx === -1 || moveIndex >= currentPath.length) return;
         let move = game.move(currentPath[moveIndex]);
-        board.position(game.fen()); // Manually update board for the Solve button
-        executeMoveSequence(move);
+        board.position(game.fen());
+        processMove(move);
     }
 
-    function executeMoveSequence(move) {
+    function processMove(move) {
         move.san.includes('x') ? sounds.capture.play() : sounds.move.play();
         moveIndex++;
+
         if (moveIndex < currentPath.length) {
             setTimeout(() => {
                 let reply = game.move(currentPath[moveIndex++]);
                 board.position(game.fen());
                 reply.san.includes('x') ? sounds.capture.play() : sounds.move.play();
-                checkFinish();
+                if (moveIndex === currentPath.length) document.getElementById('status-msg').innerText = "Line Complete!";
             }, 400);
         } else {
-            checkFinish();
+            document.getElementById('status-msg').innerText = "Line Complete!";
         }
-    }
-
-    function checkFinish() {
-        if (moveIndex >= currentPath.length) document.getElementById('status-msg').innerText = "Line Complete!";
     }
 
     function loadOpening(idx) {
@@ -155,12 +123,26 @@
     }
 
     function resetDrill() { game.reset(); board.start(); moveIndex = 0; }
+
     function renderSidebar() {
         document.getElementById('repoList').innerHTML = repoData.map((item, i) => `
             <div class="repo-item ${currentIdx==i?'active':''}" onclick="loadOpening(${i})">
                 <span style="font-weight:bold;">${item.name}</span>
             </div>`).join('');
     }
+
+    document.getElementById('pgnInput').onchange = async (e) => {
+        for (const file of e.target.files) {
+            const text = await file.text();
+            const games = text.split(/\[Event /g).filter(g => g.trim().length > 5).map(g => '[Event ' + g);
+            repoData = repoData.concat(games.map(raw => ({
+                name: (raw.match(/\[Opening "(.*?)"\]/) || [null, "Line"])[1],
+                raw: raw
+            })));
+        }
+        localStorage.setItem('chess_reps_stable', JSON.stringify(repoData));
+        renderSidebar();
+    };
 </script>
 </body>
 </html>
