@@ -11,10 +11,9 @@
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 
     <style>
-        :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; --due: #fa412d; --solve: #4583b6; }
+        :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
-        /* Drag Overlay */
         #drop-zone { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(129, 182, 76, 0.2); border: 4px dashed var(--accent); z-index: 9999; display: none; align-items: center; justify-content: center; pointer-events: none; }
         #drop-zone.active { display: flex; }
 
@@ -23,26 +22,18 @@
         .black-3c85d { background-color: #779556 !important; }
 
         header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border-bottom: 2px solid var(--border); }
-        .stats-dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 15px; }
-        .stat-card { background: var(--panel); padding: 8px; border-radius: 6px; text-align: center; border: 1px solid var(--border); }
-        .stat-val { display: block; font-size: 1.1rem; font-weight: bold; color: var(--accent); }
-        .stat-lbl { font-size: 0.6rem; text-transform: uppercase; opacity: 0.7; }
-
-        #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 5px auto; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
-        .controls { width: 92vw; max-width: 360px; margin: 0 auto 10px; background: var(--panel); padding: 12px; border-radius: 8px; box-sizing: border-box; }
+        #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 10px auto; border: 1px solid var(--border); }
+        .controls { width: 92vw; max-width: 360px; margin: 0 auto 10px; background: var(--panel); padding: 12px; border-radius: 8px; }
         
         .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-        button { padding: 10px 2px; border-radius: 6px; font-weight: bold; border: none; color: #fff; cursor: pointer; text-transform: uppercase; font-size: 0.65rem; }
+        button { padding: 12px 2px; border-radius: 6px; font-weight: bold; border: none; color: #fff; cursor: pointer; text-transform: uppercase; font-size: 0.65rem; }
         
         .library-section { flex: 1; overflow-y: auto; background: #1a1917; }
         .repo-item { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
         .repo-item.active { background: #2b2926; border-left: 4px solid var(--accent); }
-        .item-name { font-weight: bold; font-size: 0.85rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; }
-        .action-icon { background: none; border: none; color: #555; font-size: 1rem; cursor: pointer; padding: 5px; }
-        .highlight-hint { background-color: rgba(245, 246, 130, 0.7) !important; }
     </style>
 </head>
-<body id="app-body">
+<body>
 
 <div id="drop-zone"><h1>Drop PGN Here</h1></div>
 
@@ -53,179 +44,143 @@
     </label>
 </header>
 
-<div class="stats-dashboard">
-    <div class="stat-card"><span id="stat-total" class="stat-val">0</span><span class="stat-lbl">Lines</span></div>
-    <div class="stat-card"><span id="stat-mastered" class="stat-val">0</span><span class="stat-lbl">Lvl 5+</span></div>
-</div>
-
 <div id="board-wrapper"><div id="board" style="width: 100%"></div></div>
 
 <div class="controls">
-    <div id="status-msg" style="text-align:center; font-weight:bold; margin-bottom:8px; font-size:0.8rem; color:var(--accent);">Tap board to enable sound</div>
+    <div id="status-msg" style="text-align:center; font-weight:bold; margin-bottom:8px; font-size:0.8rem; color:var(--accent);">Select Variation</div>
     <div class="btn-group">
         <button style="background:#3c3a38" onclick="showHint()">Hint</button>
         <button style="background:#5c5a58" onclick="autoPlay()">Watch</button>
-        <button style="background:var(--solve)" onclick="solveMove()">Solve</button>
+        <button style="background:#4583b6" onclick="solveMove()">Solve</button>
     </div>
-    <button onclick="resetDrill()" style="width:100%; background:#444;">Reset Position</button>
+    <button onclick="resetDrill()" style="width:100%; background:#444; margin-top:5px; padding:10px;">Reset Position</button>
 </div>
 
 <div class="library-section" id="repoList"></div>
 
 <script>
-    let board = null, game = new Chess(), repoData = [], currentPath = [], moveIndex = 0, currentIdx = -1, errorOccurred = false, isAutoPlaying = false;
+    let board = null, game = new Chess(), repoData = [], currentPath = [], moveIndex = 0, currentIdx = -1, isAutoPlaying = false;
 
     const audioCtx = {
         move: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/move-self.mp3'),
         capture: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/capture.mp3'),
-        check: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/move-check.mp3'),
-        error: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/illegal.mp3')
+        check: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/move-check.mp3')
     };
 
-    function unlockAudio() {
-        Object.values(audioCtx).forEach(s => { s.play().then(()=>s.pause()).catch(()=>{}); });
-        document.getElementById('status-msg').innerText = "Sound Ready";
-        document.removeEventListener('click', unlockAudio);
-    }
-    document.addEventListener('click', unlockAudio);
-
     function playSfx(move) {
-        let s = audioCtx.move;
-        if (move.san.includes('+')) s = audioCtx.check;
-        else if (move.san.includes('x')) s = audioCtx.capture;
+        let s = move.san.includes('+') ? audioCtx.check : (move.san.includes('x') ? audioCtx.capture : audioCtx.move);
         s.currentTime = 0; s.play().catch(()=>{});
     }
 
     window.onload = () => {
-        const saved = localStorage.getItem('chess_reps_ultimate');
-        repoData = saved ? JSON.parse(saved) : [{ name: "Starter: e4 e5", raw: "1. e4 e5", level: 0, nextReview: 0 }];
+        const saved = localStorage.getItem('chess_reps_vUltimate');
+        repoData = saved ? JSON.parse(saved) : [{ name: "Starter: e4 e5", raw: "1. e4 e5", level: 0 }];
         board = Chessboard('board', { 
-            draggable: true, position: 'start', moveSpeed: 250, snapSpeed: 0,
+            draggable: true, position: 'start', moveSpeed: 'fast',
             pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png', 
             onDrop: onDrop 
         });
-        updateDashboard(); renderSidebar(); $(window).resize(board.resize);
+        renderSidebar();
+        window.addEventListener('resize', () => board.resize());
         setupDragDrop();
     };
+
+    function onDrop(source, target) {
+        if (currentIdx === -1 || isAutoPlaying) return 'snapback';
+        
+        let move = game.move({ from: source, to: target, promotion: 'q' });
+        
+        // Validation check against PGN
+        if (!move || move.san !== currentPath[moveIndex]) {
+            if (move) game.undo();
+            return 'snapback';
+        }
+
+        playSfx(move);
+        moveIndex++;
+        
+        // CRITICAL FIX: Ensure black moves immediately
+        if (moveIndex < currentPath.length) {
+            window.setTimeout(opponentReply, 250);
+        } else {
+            document.getElementById('status-msg').innerText = "Line Complete!";
+        }
+    }
+
+    function opponentReply() {
+        if (moveIndex >= currentPath.length) return;
+        const move = game.move(currentPath[moveIndex++]);
+        board.position(game.fen());
+        playSfx(move);
+        
+        if (moveIndex === currentPath.length) {
+            document.getElementById('status-msg').innerText = "Line Complete!";
+        }
+    }
+
+    function loadOpening(idx) {
+        currentIdx = idx;
+        game.reset();
+        game.load_pgn(repoData[idx].raw.replace(/\[.*?\]/g, '').trim());
+        currentPath = game.history();
+        resetDrill();
+        renderSidebar();
+        document.getElementById('status-msg').innerText = "Training: " + repoData[idx].name;
+    }
+
+    function resetDrill() {
+        game.reset();
+        board.start();
+        moveIndex = 0;
+        isAutoPlaying = false;
+    }
+
+    function solveMove() {
+        if (currentIdx !== -1 && moveIndex < currentPath.length) opponentReply();
+    }
+
+    function autoPlay() {
+        if (currentIdx === -1) return;
+        resetDrill();
+        isAutoPlaying = true;
+        let step = 0;
+        let interval = setInterval(() => {
+            if (step >= currentPath.length || !isAutoPlaying) {
+                clearInterval(interval);
+                isAutoPlaying = false;
+                return;
+            }
+            const move = game.move(currentPath[step++]);
+            board.position(game.fen());
+            playSfx(move);
+        }, 800);
+    }
 
     function setupDragDrop() {
         const zone = document.getElementById('drop-zone');
         window.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('active'); });
         window.addEventListener('dragleave', () => zone.classList.remove('active'));
-        window.addEventListener('drop', e => {
-            e.preventDefault();
-            zone.classList.remove('active');
-            const files = e.dataTransfer.files;
-            handleFiles(files);
-        });
-    }
-
-    async function handleFiles(files) {
-        for (const file of Array.from(files)) {
-            const text = await file.text();
-            const games = text.split(/\[Event /g).filter(g => g.trim().length > 5).map(g => '[Event ' + g);
-            repoData = repoData.concat(games.map(raw => {
-                const name = (raw.match(/\[Opening "(.*?)"\]/) || [null, null])[1] || (raw.match(/\[Event "(.*?)"\]/) || [null, "Line"])[1];
-                return { name, raw, level: 0, nextReview: 0 };
-            }));
-        }
-        save(); updateDashboard(); renderSidebar();
-    }
-
-    document.getElementById('pgnInput').onchange = (e) => handleFiles(e.target.files);
-
-    function onDrop(source, target) {
-        if (currentIdx === -1 || isAutoPlaying) return 'snapback';
-        let move = game.move({ from: source, to: target, promotion: 'q' });
-        if (!move || move.san !== currentPath[moveIndex]) {
-            if (move) game.undo();
-            audioCtx.error.play(); errorOccurred = true; return 'snapback';
-        }
-        playSfx(move); moveIndex++;
-        if (moveIndex < currentPath.length) setTimeout(opponentReply, 400);
-        else finalizeSRS();
-    }
-
-    function opponentReply() {
-        const move = game.move(currentPath[moveIndex++]);
-        board.position(game.fen()); playSfx(move);
-        if (moveIndex === currentPath.length) finalizeSRS();
-    }
-
-    function autoPlay() {
-        if (currentIdx === -1) return alert("Select a variation!");
-        resetDrill(); isAutoPlaying = true;
-        let step = 0;
-        let interval = setInterval(() => {
-            if (step >= currentPath.length || !isAutoPlaying) {
-                clearInterval(interval); isAutoPlaying = false;
-                document.getElementById('status-msg').innerText = "Review complete.";
-                return;
+        window.addEventListener('drop', async e => {
+            e.preventDefault(); zone.classList.remove('active');
+            for (const file of e.dataTransfer.files) {
+                const text = await file.text();
+                const games = text.split(/\[Event /g).filter(g => g.trim().length > 5).map(g => '[Event ' + g);
+                repoData = repoData.concat(games.map(raw => ({
+                    name: (raw.match(/\[Opening "(.*?)"\]/) || [null, "New Line"])[1],
+                    raw: raw, level: 0
+                })));
             }
-            const move = game.move(currentPath[step++]);
-            board.position(game.fen()); playSfx(move);
-        }, 900);
-    }
-
-    function finalizeSRS() {
-        if (isAutoPlaying) return;
-        let item = repoData[currentIdx];
-        if (!errorOccurred) item.level = Math.min((item.level || 0) + 1, 6);
-        else item.level = 0;
-        item.nextReview = Date.now() + ([0, 1, 3, 7, 14, 30, 90][item.level] * 86400000);
-        errorOccurred = false; save(); updateDashboard(); renderSidebar();
-        document.getElementById('status-msg').innerText = "Line Complete!";
-    }
-
-    function loadOpening(idx) {
-        isAutoPlaying = false; currentIdx = idx; errorOccurred = false;
-        game.reset(); game.load_pgn(repoData[idx].raw.replace(/\[.*?\]/g, '').trim());
-        currentPath = game.history(); resetDrill(); renderSidebar();
-        document.getElementById('status-msg').innerText = repoData[idx].name;
-    }
-
-    function renameLine(e, idx) {
-        e.stopPropagation();
-        const n = prompt("New name:", repoData[idx].name);
-        if (n) { repoData[idx].name = n; save(); renderSidebar(); }
-    }
-
-    function deleteLine(e, idx) {
-        e.stopPropagation();
-        if (confirm("Delete variation?")) {
-            repoData.splice(idx, 1);
-            if (currentIdx === idx) currentIdx = -1;
-            save(); updateDashboard(); renderSidebar();
-        }
-    }
-
-    function solveMove() { if (currentIdx !== -1) { errorOccurred = true; opponentReply(); } }
-
-    function showHint() {
-        if (currentIdx === -1 || moveIndex >= currentPath.length) return;
-        errorOccurred = true;
-        const move = (new Chess(game.fen())).move(currentPath[moveIndex]);
-        $(`.square-${move.from}, .square-${move.to}`).addClass('highlight-hint');
-        setTimeout(() => $('.square-55d63').removeClass('highlight-hint'), 1200);
+            localStorage.setItem('chess_reps_vUltimate', JSON.stringify(repoData));
+            renderSidebar();
+        });
     }
 
     function renderSidebar() {
         document.getElementById('repoList').innerHTML = repoData.map((item, i) => `
             <div class="repo-item ${currentIdx==i?'active':''}" onclick="loadOpening(${i})">
-                <span class="item-name">${item.name}</span>
-                <div class="item-actions">
-                    <button class="action-icon" onclick="renameLine(event, ${i})">✏️</button>
-                    <button class="action-icon" onclick="deleteLine(event, ${i})">🗑️</button>
-                </div>
+                <span style="font-weight:bold; font-size:0.85rem;">${item.name}</span>
             </div>`).join('');
     }
-
-    function save() { localStorage.setItem('chess_reps_ultimate', JSON.stringify(repoData)); }
-    function updateDashboard() {
-        document.getElementById('stat-total').innerText = repoData.length;
-        document.getElementById('stat-mastered').innerText = repoData.filter(i => i.level >= 5).length;
-    }
-    function resetDrill() { game.reset(); board.start(); moveIndex = 0; }
 </script>
 </body>
 </html>
