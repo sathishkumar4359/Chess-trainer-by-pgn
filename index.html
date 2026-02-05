@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ChessReps Pro | V2.2</title>
+    <title>ChessReps Pro | V2.3</title>
     
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -14,15 +14,22 @@
         :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; --danger: #fa412d; --blue: #4583b6; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
-        /* Fixed Header with 3 distinct buttons */
         header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border-bottom: 2px solid var(--border); }
         .header-btns { display: flex; gap: 8px; align-items: center; width: 100%; justify-content: space-between; }
         
-        #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 10px auto; border: 1px solid var(--border); }
+        #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 10px auto; border: 1px solid var(--border); position: relative; }
         
+        /* CHESS.COM THEME */
         .white-1e1d7 { background-color: #ebecd0 !important; }
         .black-3c85d { background-color: #779556 !important; }
+        
+        /* VISUAL FEEDBACK */
         .hint-square { box-shadow: inset 0 0 15px 5px rgba(255, 255, 0, 0.8) !important; }
+        .selected-square { background-color: rgba(255, 255, 0, 0.5) !important; }
+        .legal-dot { 
+            width: 20%; height: 20%; background: rgba(0,0,0,0.2); 
+            border-radius: 50%; position: absolute; top: 40%; left: 40%; pointer-events: none;
+        }
 
         .controls { width: 92vw; max-width: 360px; margin: 0 auto 10px; background: var(--panel); padding: 12px; border-radius: 8px; box-sizing: border-box; }
         .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -35,7 +42,6 @@
         
         .item-actions { display: flex; gap: 12px; }
         .action-btn { background: none; border: none; color: #555; cursor: pointer; font-size: 1rem; padding: 5px; }
-        
         .nav-btn { font-size: 0.65rem; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; border: none; color: white; min-width: 80px; text-align: center; }
     </style>
 </head>
@@ -67,6 +73,8 @@
 
 <script>
     let board = null, game = new Chess(), repoData = [], currentPath = [], moveIndex = 0, currentIdx = -1;
+    let selectedSquare = null;
+
     const sounds = {
         move: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/move-self.mp3'),
         capture: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/capture.mp3')
@@ -75,15 +83,55 @@
     window.onload = () => {
         const saved = localStorage.getItem('chess_reps_ultimate');
         if (saved) repoData = JSON.parse(saved);
+        
         board = Chessboard('board', { 
             draggable: true, position: 'start', 
             pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+            onDragStart: (src) => { if(currentIdx === -1) return false; removeHighlights(); },
             onDrop: handleMove,
-            onSnapEnd: () => { board.position(game.fen()); $('.square-55d63').removeClass('hint-square'); }
+            onSnapEnd: onSnapEnd
         });
+
+        // CLICK TO MOVE LOGIC
+        $('#board').on('click', '.square-55d63', function() {
+            const square = $(this).data('square');
+            handleSquareClick(square);
+        });
+
         renderSidebar();
         window.addEventListener('resize', () => board.resize());
     };
+
+    function handleSquareClick(square) {
+        if (currentIdx === -1) return;
+
+        // Try to move if a square was already selected
+        if (selectedSquare) {
+            let move = game.move({ from: selectedSquare, to: square, promotion: 'q' });
+            
+            if (move && move.san === currentPath[moveIndex]) {
+                processMove(move);
+                selectedSquare = null;
+                removeHighlights();
+                return;
+            } else if (move) {
+                game.undo();
+            }
+        }
+
+        // Highlight new selection and its legal moves
+        removeHighlights();
+        const moves = game.moves({ square: square, verbose: true });
+        if (moves.length > 0) {
+            selectedSquare = square;
+            $(`.square-${square}`).addClass('selected-square');
+            moves.forEach(m => {
+                $(`.square-${m.to}`).append('<div class="legal-dot"></div>');
+            });
+        } else {
+            selectedSquare = null;
+        }
+    }
 
     function handleMove(source, target) {
         if (currentIdx === -1) return 'snapback';
@@ -98,13 +146,14 @@
     function solveMove() {
         if (currentIdx === -1 || moveIndex >= currentPath.length) return;
         let move = game.move(currentPath[moveIndex]);
-        board.position(game.fen());
         processMove(move);
     }
 
     function processMove(move) {
         move.san.includes('x') ? sounds.capture.play() : sounds.move.play();
         moveIndex++;
+        board.position(game.fen());
+        
         if (moveIndex < currentPath.length) {
             setTimeout(() => {
                 let reply = game.move(currentPath[moveIndex++]);
@@ -115,6 +164,17 @@
         } else {
             document.getElementById('status-msg').innerText = "Line Complete!";
         }
+    }
+
+    function removeHighlights() {
+        $('.square-55d63').removeClass('selected-square');
+        $('.legal-dot').remove();
+    }
+
+    function onSnapEnd() {
+        board.position(game.fen());
+        $('.hint-square').removeClass('hint-square');
+        removeHighlights();
     }
 
     function showHint() {
@@ -159,7 +219,7 @@
                 try {
                     const data = JSON.parse(text);
                     repoData = repoData.concat(Array.isArray(data) ? data : [data]);
-                } catch(err) { alert("JSON Error: " + file.name); }
+                } catch(err) { alert("JSON Error in " + file.name); }
             } else {
                 const games = text.split(/\[Event /g).filter(g => g.trim().length > 5).map(g => '[Event ' + g);
                 repoData = repoData.concat(games.map(raw => ({
@@ -183,7 +243,7 @@
             </div>`).join('');
     }
 
-    function resetDrill() { game.reset(); board.start(); moveIndex = 0; $('.hint-square').removeClass('hint-square'); }
+    function resetDrill() { game.reset(); board.start(); moveIndex = 0; selectedSquare = null; removeHighlights(); }
 
     function autoPlay() {
         if (currentIdx === -1) return;
