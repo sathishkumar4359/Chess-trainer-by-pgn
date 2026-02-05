@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ChessReps Pro | Final Fix</title>
+    <title>ChessReps Pro | V2.1</title>
     
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -11,34 +11,39 @@
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 
     <style>
-        :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; --danger: #fa412d; }
+        :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; --danger: #fa412d; --blue: #4583b6; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border-bottom: 2px solid var(--border); }
+        
+        header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border-bottom: 2px solid var(--border); gap: 8px; }
         #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 10px auto; border: 1px solid var(--border); }
+        
         .white-1e1d7 { background-color: #ebecd0 !important; }
         .black-3c85d { background-color: #779556 !important; }
         .hint-square { box-shadow: inset 0 0 15px 5px rgba(255, 255, 0, 0.8) !important; }
+
         .controls { width: 92vw; max-width: 360px; margin: 0 auto 10px; background: var(--panel); padding: 12px; border-radius: 8px; box-sizing: border-box; }
         .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
         button { padding: 12px 2px; border-radius: 6px; font-weight: bold; border: none; color: #fff; cursor: pointer; text-transform: uppercase; font-size: 0.65rem; }
+        
         .library-section { flex: 1; overflow-y: auto; background: #1a1917; }
         .repo-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .repo-item.active { background: #2b2926; border-left: 4px solid var(--accent); }
         .item-name { font-weight: bold; font-size: 0.85rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+        
         .item-actions { display: flex; gap: 12px; }
         .action-btn { background: none; border: none; color: #555; cursor: pointer; font-size: 1rem; padding: 5px; }
-        .clear-btn { background: var(--danger); border: none; color: white; font-size: 0.6rem; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        
+        .nav-btn { font-size: 0.6rem; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; border: none; color: white; }
     </style>
 </head>
 <body>
 
 <header>
-    <button class="clear-btn" onclick="clearAll()">CLEAR ALL</button>
-    <div style="display:flex; gap:10px; align-items:center;">
-        <label style="background:var(--accent); padding:6px 12px; border-radius:4px; color:#000; font-size:0.75rem; font-weight:bold; cursor:pointer;">
-            LOAD FILES <input type="file" id="pgnInput" accept="*" multiple hidden>
-        </label>
-    </div>
+    <button class="nav-btn" style="background:var(--danger)" onclick="clearAll()">CLEAR</button>
+    <button class="nav-btn" style="background:var(--blue)" onclick="exportJSON()">EXPORT</button>
+    <label style="background:var(--accent); padding:6px 10px; border-radius:4px; color:#000; font-size:0.6rem; font-weight:bold; cursor:pointer; text-transform: uppercase;">
+        LOAD <input type="file" id="pgnInput" accept="*" multiple hidden>
+    </label>
 </header>
 
 <div id="board-wrapper"><div id="board" style="width: 100%"></div></div>
@@ -127,6 +132,18 @@
     function renameLine(e, idx) { e.stopPropagation(); const n = prompt("Rename:", repoData[idx].name); if (n) { repoData[idx].name = n; saveAndRender(); } }
     function deleteLine(e, idx) { e.stopPropagation(); if (confirm("Delete?")) { repoData.splice(idx, 1); if (currentIdx === idx) currentIdx = -1; saveAndRender(); } }
     function clearAll() { if (confirm("Wipe library?")) { repoData = []; currentIdx = -1; saveAndRender(); } }
+    
+    function exportJSON() {
+        if (repoData.length === 0) return alert("Library is empty!");
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(repoData, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "chess_reps_backup.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
     function saveAndRender() { localStorage.setItem('chess_reps_ultimate', JSON.stringify(repoData)); renderSidebar(); }
 
     document.getElementById('pgnInput').onchange = async (e) => {
