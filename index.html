@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ChessReps Pro | Stable</title>
+    <title>ChessReps Pro | Stable Management</title>
     
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -11,13 +11,12 @@
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 
     <style>
-        :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; }
+        :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; --danger: #fa412d; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
         header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border-bottom: 2px solid var(--border); }
         #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 10px auto; border: 1px solid var(--border); }
         
-        /* CHESS.COM COLORS */
         .white-1e1d7 { background-color: #ebecd0 !important; }
         .black-3c85d { background-color: #779556 !important; }
 
@@ -26,17 +25,27 @@
         button { padding: 12px 2px; border-radius: 6px; font-weight: bold; border: none; color: #fff; cursor: pointer; text-transform: uppercase; font-size: 0.65rem; }
         
         .library-section { flex: 1; overflow-y: auto; background: #1a1917; }
-        .repo-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; }
+        .repo-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .repo-item.active { background: #2b2926; border-left: 4px solid var(--accent); }
+        .item-name { font-weight: bold; font-size: 0.85rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+        
+        .item-actions { display: flex; gap: 12px; }
+        .action-btn { background: none; border: none; color: #555; cursor: pointer; font-size: 1rem; padding: 5px; }
+        .action-btn:hover { color: var(--accent); }
+        
+        .clear-btn { background: none; border: 1px solid var(--danger); color: var(--danger); font-size: 0.6rem; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <header>
     <span style="font-weight:bold; color:var(--accent)">CHESSREPS PRO</span>
-    <label style="background:var(--accent); padding:6px 12px; border-radius:4px; color:#000; font-size:0.75rem; font-weight:bold; cursor:pointer;">
-        UPLOAD PGN <input type="file" id="pgnInput" accept=".pgn" multiple hidden>
-    </label>
+    <div style="display:flex; gap:10px; align-items:center;">
+        <button class="clear-btn" onclick="clearAll()">CLEAR ALL</button>
+        <label style="background:var(--accent); padding:6px 12px; border-radius:4px; color:#000; font-size:0.75rem; font-weight:bold; cursor:pointer;">
+            PGN+ <input type="file" id="pgnInput" accept=".pgn" multiple hidden>
+        </label>
+    </div>
 </header>
 
 <div id="board-wrapper"><div id="board" style="width: 100%"></div></div>
@@ -62,7 +71,7 @@
     };
 
     window.onload = () => {
-        const saved = localStorage.getItem('chess_reps_stable');
+        const saved = localStorage.getItem('chess_reps_managed');
         if (saved) repoData = JSON.parse(saved);
         
         board = Chessboard('board', { 
@@ -80,12 +89,10 @@
     function handleMove(source, target) {
         if (currentIdx === -1) return 'snapback';
         let move = game.move({ from: source, to: target, promotion: 'q' });
-
         if (!move || move.san !== currentPath[moveIndex]) {
             if (move) game.undo();
             return 'snapback';
         }
-
         processMove(move);
     }
 
@@ -99,7 +106,6 @@
     function processMove(move) {
         move.san.includes('x') ? sounds.capture.play() : sounds.move.play();
         moveIndex++;
-
         if (moveIndex < currentPath.length) {
             setTimeout(() => {
                 let reply = game.move(currentPath[moveIndex++]);
@@ -122,27 +128,80 @@
         document.getElementById('status-msg').innerText = repoData[idx].name;
     }
 
-    function resetDrill() { game.reset(); board.start(); moveIndex = 0; }
+    function renameLine(e, idx) {
+        e.stopPropagation();
+        const newName = prompt("Rename variation:", repoData[idx].name);
+        if (newName) {
+            repoData[idx].name = newName;
+            saveAndRender();
+        }
+    }
+
+    function deleteLine(e, idx) {
+        e.stopPropagation();
+        if (confirm("Delete this variation?")) {
+            repoData.splice(idx, 1);
+            if (currentIdx === idx) currentIdx = -1;
+            saveAndRender();
+        }
+    }
+
+    function clearAll() {
+        if (confirm("Are you sure you want to delete ALL variations? This cannot be undone.")) {
+            repoData = [];
+            currentIdx = -1;
+            saveAndRender();
+        }
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('chess_reps_managed', JSON.stringify(repoData));
+        renderSidebar();
+    }
 
     function renderSidebar() {
         document.getElementById('repoList').innerHTML = repoData.map((item, i) => `
             <div class="repo-item ${currentIdx==i?'active':''}" onclick="loadOpening(${i})">
-                <span style="font-weight:bold;">${item.name}</span>
+                <span class="item-name">${item.name}</span>
+                <div class="item-actions">
+                    <button class="action-btn" onclick="renameLine(event, ${i})">✏️</button>
+                    <button class="action-btn" onclick="deleteLine(event, ${i})">🗑️</button>
+                </div>
             </div>`).join('');
     }
+
+    function resetDrill() { game.reset(); board.start(); moveIndex = 0; }
 
     document.getElementById('pgnInput').onchange = async (e) => {
         for (const file of e.target.files) {
             const text = await file.text();
             const games = text.split(/\[Event /g).filter(g => g.trim().length > 5).map(g => '[Event ' + g);
             repoData = repoData.concat(games.map(raw => ({
-                name: (raw.match(/\[Opening "(.*?)"\]/) || [null, "Line"])[1],
+                name: (raw.match(/\[Opening "(.*?)"\]/) || [null, "New Variation"])[1],
                 raw: raw
             })));
         }
-        localStorage.setItem('chess_reps_stable', JSON.stringify(repoData));
-        renderSidebar();
+        saveAndRender();
     };
+
+    function autoPlay() {
+        if (currentIdx === -1) return;
+        resetDrill();
+        let step = 0;
+        let interval = setInterval(() => {
+            if (step >= currentPath.length) { clearInterval(interval); return; }
+            let m = game.move(currentPath[step++]);
+            board.position(game.fen());
+            m.san.includes('x') ? sounds.capture.play() : sounds.move.play();
+        }, 800);
+    }
+
+    function showHint() {
+        if (currentIdx === -1 || moveIndex >= currentPath.length) return;
+        const move = (new Chess(game.fen())).move(currentPath[moveIndex]);
+        $(`.square-${move.from}, .square-${move.to}`).css('box-shadow', 'inset 0 0 10px 5px yellow');
+        setTimeout(() => $(`.square-55d63`).css('box-shadow', 'none'), 1000);
+    }
 </script>
 </body>
 </html>
