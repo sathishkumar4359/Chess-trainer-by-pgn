@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ChessReps Pro | Master Build</title>
+    <title>ChessReps Pro | Final Fix</title>
     
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -13,29 +13,20 @@
     <style>
         :root { --bg: #121212; --panel: #262421; --accent: #81b64c; --text: #bababa; --border: #312e2b; --danger: #fa412d; }
         body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        
         header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; background: #1e1e1e; border-bottom: 2px solid var(--border); }
         #board-wrapper { width: 92vw; max-width: 360px; aspect-ratio: 1/1; margin: 10px auto; border: 1px solid var(--border); }
-        
-        /* CHESS.COM THEME */
         .white-1e1d7 { background-color: #ebecd0 !important; }
         .black-3c85d { background-color: #779556 !important; }
-
-        /* HINT SYSTEM */
         .hint-square { box-shadow: inset 0 0 15px 5px rgba(255, 255, 0, 0.8) !important; }
-
         .controls { width: 92vw; max-width: 360px; margin: 0 auto 10px; background: var(--panel); padding: 12px; border-radius: 8px; box-sizing: border-box; }
         .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
         button { padding: 12px 2px; border-radius: 6px; font-weight: bold; border: none; color: #fff; cursor: pointer; text-transform: uppercase; font-size: 0.65rem; }
-        
         .library-section { flex: 1; overflow-y: auto; background: #1a1917; }
         .repo-item { padding: 12px 15px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .repo-item.active { background: #2b2926; border-left: 4px solid var(--accent); }
         .item-name { font-weight: bold; font-size: 0.85rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
-        
         .item-actions { display: flex; gap: 12px; }
         .action-btn { background: none; border: none; color: #555; cursor: pointer; font-size: 1rem; padding: 5px; }
-        
         .clear-btn { background: var(--danger); border: none; color: white; font-size: 0.6rem; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
@@ -45,7 +36,7 @@
     <button class="clear-btn" onclick="clearAll()">CLEAR ALL</button>
     <div style="display:flex; gap:10px; align-items:center;">
         <label style="background:var(--accent); padding:6px 12px; border-radius:4px; color:#000; font-size:0.75rem; font-weight:bold; cursor:pointer;">
-            LOAD FILES <input type="file" id="pgnInput" accept=".pgn,.json,.js,application/json,text/javascript" multiple hidden>
+            LOAD FILES <input type="file" id="pgnInput" accept="*" multiple hidden>
         </label>
     </div>
 </header>
@@ -66,7 +57,6 @@
 
 <script>
     let board = null, game = new Chess(), repoData = [], currentPath = [], moveIndex = 0, currentIdx = -1;
-
     const sounds = {
         move: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/move-self.mp3'),
         capture: new Audio('https://images.chesscomfiles.com/chess-themes/sounds/_standard_/default/capture.mp3')
@@ -75,18 +65,12 @@
     window.onload = () => {
         const saved = localStorage.getItem('chess_reps_ultimate');
         if (saved) repoData = JSON.parse(saved);
-        
         board = Chessboard('board', { 
-            draggable: true, 
-            position: 'start', 
+            draggable: true, position: 'start', 
             pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
             onDrop: handleMove,
-            onSnapEnd: () => { 
-                board.position(game.fen()); 
-                $('.square-55d63').removeClass('hint-square'); 
-            }
+            onSnapEnd: () => { board.position(game.fen()); $('.square-55d63').removeClass('hint-square'); }
         });
-        
         renderSidebar();
         window.addEventListener('resize', () => board.resize());
     };
@@ -127,9 +111,7 @@
         if (currentIdx === -1 || moveIndex >= currentPath.length) return;
         const tempGame = new Chess(game.fen());
         const moveObj = tempGame.move(currentPath[moveIndex]);
-        if (moveObj) {
-            $(`.square-${moveObj.from}, .square-${moveObj.to}`).addClass('hint-square');
-        }
+        if (moveObj) { $(`.square-${moveObj.from}, .square-${moveObj.to}`).addClass('hint-square'); }
     }
 
     function loadOpening(idx) {
@@ -142,32 +124,10 @@
         document.getElementById('status-msg').innerText = repoData[idx].name;
     }
 
-    function renameLine(e, idx) {
-        e.stopPropagation();
-        const n = prompt("Rename variation:", repoData[idx].name);
-        if (n) { repoData[idx].name = n; saveAndRender(); }
-    }
-
-    function deleteLine(e, idx) {
-        e.stopPropagation();
-        if (confirm("Delete this line?")) {
-            repoData.splice(idx, 1);
-            if (currentIdx === idx) currentIdx = -1;
-            saveAndRender();
-        }
-    }
-
-    function clearAll() {
-        if (confirm("Wipe entire library?")) {
-            repoData = []; currentIdx = -1;
-            saveAndRender();
-        }
-    }
-
-    function saveAndRender() {
-        localStorage.setItem('chess_reps_ultimate', JSON.stringify(repoData));
-        renderSidebar();
-    }
+    function renameLine(e, idx) { e.stopPropagation(); const n = prompt("Rename:", repoData[idx].name); if (n) { repoData[idx].name = n; saveAndRender(); } }
+    function deleteLine(e, idx) { e.stopPropagation(); if (confirm("Delete?")) { repoData.splice(idx, 1); if (currentIdx === idx) currentIdx = -1; saveAndRender(); } }
+    function clearAll() { if (confirm("Wipe library?")) { repoData = []; currentIdx = -1; saveAndRender(); } }
+    function saveAndRender() { localStorage.setItem('chess_reps_ultimate', JSON.stringify(repoData)); renderSidebar(); }
 
     document.getElementById('pgnInput').onchange = async (e) => {
         for (const file of e.target.files) {
@@ -177,7 +137,7 @@
                 try {
                     const data = JSON.parse(text);
                     repoData = repoData.concat(Array.isArray(data) ? data : [data]);
-                } catch(err) { alert("JSON Error in " + file.name); }
+                } catch(err) { alert("JSON Error: " + file.name); }
             } else {
                 const games = text.split(/\[Event /g).filter(g => g.trim().length > 5).map(g => '[Event ' + g);
                 repoData = repoData.concat(games.map(raw => ({
@@ -201,10 +161,7 @@
             </div>`).join('');
     }
 
-    function resetDrill() { 
-        game.reset(); board.start(); moveIndex = 0; 
-        $('.square-55d63').removeClass('hint-square'); 
-    }
+    function resetDrill() { game.reset(); board.start(); moveIndex = 0; $('.square-55d63').removeClass('hint-square'); }
 
     function autoPlay() {
         if (currentIdx === -1) return;
